@@ -24,8 +24,8 @@ A simple and fast web application to download YouTube videos as high-quality WAV
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/youtube-wav-converter.git
-   cd youtube-wav-converter
+   git clone https://github.com/undergroundrap/yt-wav-converter.git
+   cd yt-wav-converter
    ```
 
 2. **Set up a virtual environment (recommended)**
