@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#181818" />
+  <title>YouTube → WAV | Converter | Open-Source</title>
+  <style>
+    :root {
+      --bg-1: #181818; /* main */
+      --bg-2: #212121; /* main */
+      --text: #eaeaea;
+      --muted: #b5b5b5;
+      --card: #1d1d1d;
+      --card-2: #222222;
+      --accent: #7bd88f;     /* subtle green (modern) */
+      --accent-2: #86e6ff;   /* subtle cyan for focus */
+      --danger: #ff6b6b;
+      --shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(1200px 600px at 20% -10%, #242424 0%, transparent 60%),
+                  radial-gradient(1000px 800px at 120% 10%, #1f2a24 0%, transparent 60%),
+                  linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    }
+
+    .wrapper { min-height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+
+    /* Header */
+    header { position: sticky; top: 0; backdrop-filter: saturate(140%) blur(8px); background: color-mix(in srgb, var(--bg-2) 80%, transparent); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 20; }
+    .nav { max-width: 960px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 16px; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: 0.3px; }
+    .brand .logo { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; box-shadow: var(--shadow); }
+    .brand .logo svg { filter: drop-shadow(0 4px 10px rgba(0,0,0,.35)); }
+    .nav .minor { color: var(--muted); font-size: 14px; }
+
+    /* Main Card */
+    .container { max-width: 960px; margin: 40px auto; padding: 0 20px; }
+    .card { background: linear-gradient(180deg, var(--card), var(--card-2)); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .title { font-size: clamp(18px, 2.2vw, 22px); font-weight: 700; letter-spacing: .2px; }
+
+    .content { padding: 22px; display: grid; gap: 18px; }
+
+    /* Input group */
+    .field { display: grid; gap: 8px; }
+    label { font-size: 14px; color: var(--muted); }
+
+    .input-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; }
+    .input { position: relative; }
+    .input input[type="text"] { width: 100%; background: #161616; border: 1px solid rgba(255,255,255,0.08); color: var(--text); border-radius: 12px; padding: 14px 44px 14px 44px; font-size: 16px; outline: none; transition: border-color .2s ease, box-shadow .2s ease; }
+    .input input[type="text"]:focus { border-color: color-mix(in srgb, var(--accent-2) 60%, white 0%); box-shadow: 0 0 0 4px rgba(134, 230, 255, 0.12); }
+    .input .leading, .input .trailing { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; display: grid; place-items: center; opacity: .8; }
+    .input .leading { left: 12px; }
+    .input .trailing { right: 12px; }
+
+    button, .btn { appearance: none; border: none; cursor: pointer; user-select: none; background: linear-gradient(180deg, #2b2b2b, #202020); color: var(--text); padding: 12px 16px; border-radius: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.08); transition: transform .06s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    .btn-accent { background: linear-gradient(180deg, #2f3b36, #1c251f); border-color: rgba(123,216,143,0.35); }
+    .btn-ghost { background: #1a1a1a; }
+
+    /* Preview */
+    .preview { display: none; grid-template-columns: 160px 1fr; gap: 16px; align-items: center; background: #171717; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 12px; }
+    .preview img { width: 100%; height: 90px; object-fit: cover; border-radius: 10px; }
+    .preview .meta { display: grid; gap: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,.08); background: #141414; color: var(--muted); }
+
+    /* Minimal clear (X) button inside input */
+    .input .trailing-btn { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); width: 28px; height: 28px; display: grid; place-items: center; background: transparent; border: none; padding: 0; margin: 0; border-radius: 8px; color: var(--muted); opacity: 0; pointer-events: none; transition: opacity .15s ease, background .2s ease; }
+    .input.has-value .trailing-btn { opacity: .9; pointer-events: auto; }
+    .input .trailing-btn:hover { background: rgba(255,255,255,.06); }
+    .input .trailing-btn svg path { stroke: currentColor; }
+
+    /* Status / Toast */
+    .status { display: none; border-radius: 12px; padding: 12px 14px; font-size: 14px; border: 1px solid rgba(255,255,255,.08); }
+    .status.show { display: block; }
+    .status.ok { background: #122018; color: #b6f3c4; border-color: rgba(123,216,143,0.35); }
+    .status.err { background: #261616; color: #ffbdbd; border-color: rgba(255, 107, 107, .4); }
+    .status.info { background: #11191d; color: #c6f2ff; border-color: rgba(134, 230, 255, .35); }
+
+    /* Footer */
+    footer { color: var(--muted); font-size: 13px; }
+    .footer-inner { max-width: 960px; margin: 0 auto; padding: 20px; opacity: .75; text-align: center; }
+    .footer-author { font-weight: 700; margin-bottom: 6px; }
+    .footer-inner .disclaimer { margin: 0; }
+
+    /* Spinner */
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.25); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Small screens */
+    @media (max-width: 640px) {
+      .input-row { grid-template-columns: 1fr; }
+      .preview { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <header>
+      <div class="nav">
+        <div class="brand" aria-label="App brand">
+          <div class="logo" aria-hidden="true">
+            <!-- Minimal play icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 5v14l11-7L8 5z" fill="#0b0b0b"/>
+            </svg>
+          </div>
+          <span>YouTube → WAV</span>
+          <span class="minor">Fast • Free • Private • Simple • Best Possible Quality • WAV (48kHz, stereo, 16-bit PCM, 320kbps)</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card" role="region" aria-labelledby="converter-title">
+        <div class="card-header">
+          <h1 id="converter-title" class="title">Convert a YouTube link to WAV</h1>
+          <div class="chip" title="Uses your server to process the file">
+            <!-- shield icon -->
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3l7 4v5c0 5-3.5 9-7 9s-7-4-7-9V7l7-4z" stroke="#68c491"/></svg>
+            Local server
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="field">
+            <label for="youtubeUrl">YouTube URL</label>
+            <div class="input-row">
+              <div class="input" style="min-width:0;">
+                <span class="leading" aria-hidden="true">
+                  <!-- link icon -->
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 14a5 5 0 007.07 0l1.41-1.41a5 5 0 10-7.07-7.07L10 6" stroke="#9bdff1" stroke-width="1.5"/><path d="M14 10a5 5 0 00-7.07 0L5.5 11.43a5 5 0 107.07 7.07L14 18" stroke="#9bdff1" stroke-width="1.5"/></svg>
+                </span>
+                <input id="youtubeUrl" type="text" inputmode="url" placeholder="Paste a YouTube link (Ctrl/⌘+V)" autocomplete="off" spellcheck="false" />
+                <button id="clearBtn" class="trailing-btn" type="button" title="Clear" aria-label="Clear input">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 6l12 12M18 6L6 18" stroke-width="1.5"/></svg>
+                </button>
+              </div>
+              <button id="pasteBtn" class="btn" type="button" title="Paste from clipboard">
+                <!-- paste icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 3h6v3H9z" stroke="#b5b5b5"/><path d="M7 6h10a2 2 0 012 2v11a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" stroke="#b5b5b5"/></svg>
+                Paste
+              </button>
+              <button id="convertBtn" class="btn btn-accent" type="button">
+                <!-- download icon -->
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="#b6f3c4" stroke-width="1.5"/><path d="M5 19h14" stroke="#b6f3c4"/></svg>
+                Convert to WAV
+              </button>
+            </div>
+          </div>
+
+          <div id="preview" class="preview" aria-live="polite" aria-atomic="true">
+            <img id="thumb" alt="Video thumbnail" />
+            <div class="meta">
+              <div id="videoTitle" class="minor" style="font-size:14px; color:#d6d6d6;">Video preview</div>
+              <div class="chip" id="urlValidity">Waiting for a valid YouTube URL…</div>
+            </div>
+          </div>
+
+          <div id="status" class="status info" role="status">Paste a link to begin.</div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-inner">
+        <div class="footer-author">Created by Ocean Bennett</div>
+        <p class="disclaimer">Users should only convert and download content for which they have the legal right or permission to do so. This application is provided in good faith and for general purposes only. I am not liable for the actions you take on this application, nor for any losses or damages in connection with its use. By using <em>YouTube to WAV Converter</em>, you consent to this disclaimer and agree to its terms.</p>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const urlInput = document.getElementById('youtubeUrl');
+    const convertBtn = document.getElementById('convertBtn');
+    const statusEl = document.getElementById('status');
+    const preview = document.getElementById('preview');
+    const thumb = document.getElementById('thumb');
+    const titleEl = document.getElementById('videoTitle');
+    const urlValidity = document.getElementById('urlValidity');
+    const pasteBtn = document.getElementById('pasteBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    function toggleClear() {
+      const wrap = clearBtn ? clearBtn.parentElement : null;
+      if (!wrap) return;
+      wrap.classList.toggle('has-value', !!urlInput.value.trim());
+    }
+
+    // --- Helpers ---
+    const YT_REGEX = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})(?:[&#?].*)?$/i;
+
+    function setStatus(type, msg) {
+      statusEl.className = 'status show ' + (type || 'info');
+      statusEl.textContent = msg;
+    }
+
+    function extractVideoId(url) {
+      const m = url.trim().match(YT_REGEX);
+      return m ? m[4] : null;
+    }
+
+    function updatePreview(url) {
+      const id = extractVideoId(url || '');
+      if (!id) {
+        preview.style.display = 'none';
+        urlValidity.textContent = 'Waiting for a valid YouTube URL…';
+        return null;
+      }
+      const thumbUrl = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+      thumb.src = thumbUrl;
+      thumb.referrerPolicy = 'no-referrer';
+      preview.style.display = 'grid';
+      urlValidity.textContent = 'Valid YouTube URL';
+      return id;
+    }
+
+    function setLoading(loading) {
+      if (loading) {
+        convertBtn.disabled = true;
+        convertBtn.dataset.label = convertBtn.textContent;
+        convertBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span> Converting…';
+      } else {
+        convertBtn.disabled = false;
+        convertBtn.textContent = 'Convert to WAV';
+      }
+    }
+
+    // Persist last URL for convenience
+    const LAST_KEY = 'yt2wav:lastUrl';
+    const last = localStorage.getItem(LAST_KEY);
+    if (last) { urlInput.value = last; updatePreview(last); setStatus('info', 'Ready when you are.'); toggleClear(); }
+
+    urlInput.addEventListener('input', (e) => {
+      const v = e.target.value;
+      localStorage.setItem(LAST_KEY, v);
+      updatePreview(v);
+      toggleClear();
+    });
+
+    // Paste from clipboard
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const txt = await navigator.clipboard.readText();
+        if (txt) {
+          urlInput.value = txt.trim();
+          localStorage.setItem(LAST_KEY, urlInput.value);
+          updatePreview(urlInput.value);
+          toggleClear();
+          setStatus('info', 'Link pasted. Hit Convert when ready.');
+        } else {
+          setStatus('err', 'Clipboard is empty.');
+        }
+      } catch (e) {
+        setStatus('err', 'Clipboard permission denied. Paste manually (Ctrl/⌘+V).');
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      urlInput.value = '';
+      localStorage.removeItem(LAST_KEY);
+      updatePreview('');
+      setStatus('info', 'Paste a link to begin.');
+      toggleClear();
+      urlInput.focus();
+    });
+
+    // Enter to submit
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') convertBtn.click();
+    });
+
+    convertBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      const id = extractVideoId(url);
+      if (!id) {
+        setStatus('err', 'Please paste a valid YouTube URL.');
+        return;
+      }
+
+      setStatus('info', 'Processing… this can take a moment.');
+      setLoading(true);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+      try {
+        const res = await fetch('/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        let result;
+        try {
+          result = await res.json();
+        } catch (e) {
+          throw new Error('Invalid server response.');
+        }
+
+        if (!res.ok) {
+          throw new Error(result?.error || `Server error: ${res.status}`);
+        }
+
+        if (!result?.filename) {
+          throw new Error('Server did not return a filename.');
+        }
+
+        // trigger download
+        window.location.href = `/download/${result.filename}`;
+        setStatus('ok', 'Download started! Check your downloads folder.');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          setStatus('err', 'The request took too long (60s). Please try again.');
+        } else if (String(err.message || '').includes('Failed to fetch')) {
+          setStatus('err', 'Could not connect to the server. Is it running?');
+        } else {
+          setStatus('err', `Error: ${err.message || 'Unknown error'}`);
+        }
+      } finally {
+        clearTimeout(timeout);
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>
