@@ -35,64 +35,33 @@ from logging.handlers import RotatingFileHandler
 
 # yt-dlp options for maximum audio quality
 ydl_opts = {
-    # Get all available formats to find the best one
-    'format': 'bestaudio',
-    
-    # Explicit format selection for highest quality
-    'format_sort': [
-        'vcodec:none',           # Audio only
-        'acodec:m4a',            # Prefer m4a (AAC) for best quality
-        'acodec:opus',           # Then Opus
-        'acodec:mp3',            # Then MP3 as fallback
-        'filesize:>100M',        # Prefer larger files (better quality)
-        'tbr:>256',              # Minimum bitrate of 256kbps
-        'asr:>44100'             # Minimum sample rate of 44.1kHz
-    ],
-    'format_sort_force': 'U',    # Force user's sort order
-    'extract_flat': False,       # Get full format information
-    'force_generic_extractor': False,
-    'ignore_no_formats_error': True,
-    'no_warnings': False,        # Show all warnings
-    'quiet': False,              # Show progress
-    'verbose': True,             # Show detailed information
-    
-    # Output template with detailed naming
-    'outtmpl': os.path.join(TEMP_AUDIO_DIR, 
-                          '%(title).100s - %(uploader).50s - %(id)s.%(ext)s'),
-    
-    # Force specific format combinations for best quality
-    'merge_output_format': 'wav',
-    'audio_quality': '0',        # Best quality
-    'audioformat': 'wav',        # Output format
-    'postprocessor_args': ['-ar', '48000', '-ac', '2', '-sample_fmt', 's16'],  # 48kHz, Stereo, 16-bit
-    
-    # Optimize for best quality extraction
+    'format': 'bestaudio/best',
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'wav',
-        'preferredquality': '0',  # Highest quality
-        'nopostoverwrites': True,
+        'preferredquality': '0', # Highest quality
+        'nopostoverwrites': False,
     }],
-    # FFmpeg options for WAV
+    # FFmpeg options for WAV conversion
     'postprocessor_args': {
         'key': 'FFmpegExtractAudio',
         'opts': [
-            '-ar', '48000',    # Sample rate
-            '-ac', '2',       # Channels (stereo)
-            '-b:a', '320k',   # Audio bitrate
-            '-acodec', 'pcm_s16le'  # High quality PCM codec
+            '-ar', '48000',      # Sample rate
+            '-ac', '2',         # Channels (stereo)
+            '-b:a', '320k',      # Audio bitrate
+            '-acodec', 'pcm_s16le' # High quality PCM codec
         ]
     },
     'outtmpl': os.path.join(TEMP_AUDIO_DIR, 'youtube_audio_%(id)s.%(ext)s'),
     'quiet': False,
     'no_warnings': False,
-    'nocheckcertificate': True,  # Disable SSL verification
+    'nocheckcertificate': True,
     'source_address': '0.0.0.0',
     'socket_timeout': 30,
     'retries': 3,
     'fragment_retries': 3,
     'skip_unavailable_fragments': True,
-    'forceip': 4,  # Force IPv4
+    'forceip': 4, # Force IPv4 to bypass some 403 Forbidden errors
     'extractor_retries': 3,
     'ignoreerrors': 'only_download',
     'no_color': True,
@@ -170,92 +139,70 @@ def download_audio():
         data = request.get_json()
         if not data or 'url' not in data:
             return jsonify({'error': 'No URL provided'}), 400
-            
+
         url = data['url'].strip()
         logger.info(f"Processing URL: {url}")
         
-        # First, get video info to find the best format
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        # Get video info to create a clean filename
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
             info = ydl.extract_info(url, download=False)
-            
-            # Find the best audio format
-            best_format = None
-            max_abr = 0
-            
-            for fmt in info.get('formats', []):
-                if fmt.get('vcodec') == 'none':  # Audio only
-                    abr = fmt.get('abr')
-                    # Only consider formats with a valid bitrate
-                    if abr is not None and (best_format is None or abr > max_abr):
-                        max_abr = abr
-                        best_format = fmt
-                        
-            # Fallback to any audio format if no format with bitrate was found
-            if best_format is None:
-                for fmt in info.get('formats', []):
-                    if fmt.get('vcodec') == 'none':
-                        best_format = fmt
-                        max_abr = fmt.get('abr', 0)
-                        break
-            
-            if not best_format:
-                return jsonify({'error': 'No suitable audio format found'}), 400
-                
-            # Create a clean filename
-            title = re.sub(r'[^\w\s-]', '', info.get('title', 'audio')).strip()
-            uploader = re.sub(r'[^\w\s-]', '', info.get('uploader', 'unknown')).strip()
-            video_id = info.get('id', str(int(time.time())))
-            
-            filename = f"{title} - {uploader} - {video_id}.wav"
-            output_path = os.path.join(TEMP_AUDIO_DIR, filename)
-            
-            # Configure yt-dlp for best quality
-            ydl_opts.update({
-                'format': f"{best_format['format_id']}/best",
-                'outtmpl': output_path.replace('.wav', '.%(ext)s'),
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'wav',
-                    'preferredquality': '0',
-                    'nopostoverwrites': False,
-                }],
-                'postprocessor_args': [
-                    '-ar', '48000',
-                    '-ac', '2',
-                    '-sample_fmt', 's16',
-                    '-b:a', '320k'
-                ]
-            })
-            
-            logger.info(f"Downloading with format: {best_format['format_id']} (bitrate: {max_abr}kbps)")
-            
-            # Download the audio
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-                
-                # Find the downloaded file
-                base_name = os.path.basename(output_path).replace('.wav', '')
-                for f in os.listdir(TEMP_AUDIO_DIR):
-                    if f.startswith(base_name):
-                        output_path = os.path.join(TEMP_AUDIO_DIR, f)
-                        break
-                
-                # Get file stats
-                file_size = os.path.getsize(output_path) / (1024 * 1024)  # in MB
-                duration = info.get('duration', 0)
-                
-                logger.info(f"Successfully downloaded: {os.path.basename(output_path)} "
-                          f"({file_size:.2f}MB, {duration//60}:{duration%60:02d})")
-                
-                return jsonify({
-                    'filename': os.path.basename(output_path),
-                    'title': info.get('title', 'audio'),
-                    'uploader': info.get('uploader', 'unknown'),
-                    'duration': duration,
-                    'quality': f"{max_abr}kbps" if max_abr > 0 else "unknown",
-                    'size_mb': round(file_size, 2)
-                })
-                
+        
+        # Create a clean filename
+        title = re.sub(r'[^\w\s-]', '', info.get('title', 'audio')).strip()
+        uploader = re.sub(r'[^\w\s-]', '', info.get('uploader', 'unknown')).strip()
+        video_id = info.get('id', str(int(time.time())))
+        
+        # The output path should point to the final WAV file
+        output_path = os.path.join(TEMP_AUDIO_DIR, f"{title} - {uploader} - {video_id}.wav")
+        
+        # Use a temporary file for the initial download to prevent overwrites
+        temp_outtmpl = os.path.join(TEMP_AUDIO_DIR, 'temp_audio_%(id)s.%(ext)s')
+        
+        # Configure yt-dlp for best quality audio extraction and conversion
+        download_opts = ydl_opts.copy()
+        download_opts['outtmpl'] = temp_outtmpl
+        
+        logger.info("Downloading and converting audio...")
+        
+        with yt_dlp.YoutubeDL(download_opts) as ydl:
+            ydl.download([url])
+        
+        # Find the downloaded file
+        downloaded_files = os.listdir(TEMP_AUDIO_DIR)
+        temp_audio_file = None
+        for f in downloaded_files:
+            if f.startswith(f"temp_audio_{video_id}"):
+                temp_audio_file = os.path.join(TEMP_AUDIO_DIR, f)
+                break
+        
+        if not temp_audio_file:
+            return jsonify({'error': 'Download was unsuccessful. No temporary audio file found.'}), 500
+
+        # Now convert the downloaded file to WAV using pydub
+        logger.info(f"Converting '{temp_audio_file}' to WAV...")
+        audio = AudioSegment.from_file(temp_audio_file)
+        audio.export(output_path, 
+                     format="wav", 
+                     parameters=["-acodec", "pcm_s16le", "-ar", "48000", "-ac", "2", "-b:a", "320k"])
+        
+        # Remove the temporary file
+        os.remove(temp_audio_file)
+        
+        # Get final file stats
+        file_size = os.path.getsize(output_path) / (1024 * 1024)  # in MB
+        duration = info.get('duration', 0)
+        
+        logger.info(f"Successfully converted and saved: {os.path.basename(output_path)} "
+                  f"({file_size:.2f}MB, {duration//60}:{duration%60:02d})")
+        
+        return jsonify({
+            'filename': os.path.basename(output_path),
+            'title': info.get('title', 'audio'),
+            'uploader': info.get('uploader', 'unknown'),
+            'duration': duration,
+            'size_mb': round(file_size, 2)
+        })
+        
     except yt_dlp.utils.DownloadError as e:
         error_msg = f"Download error: {str(e)}"
         logger.error(error_msg, exc_info=True)
