@@ -39,41 +39,31 @@ ydl_opts = {
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'wav',
-        'preferredquality': '0', # Highest quality
-        'nopostoverwrites': False,
+        'preferredquality': '0',  # Highest quality
     }],
-    # FFmpeg options for WAV conversion
-    'postprocessor_args': {
-        'key': 'FFmpegExtractAudio',
-        'opts': [
-            '-ar', '48000',      # Sample rate
-            '-ac', '2',         # Channels (stereo)
-            '-b:a', '320k',      # Audio bitrate
-            '-acodec', 'pcm_s16le' # High quality PCM codec
-        ]
-    },
+    'postprocessor_args': [
+        '-ar', '48000',           # Sample rate
+        '-ac', '2',               # Channels (stereo)
+        '-acodec', 'pcm_s16le'    # High quality PCM codec
+    ],
     'outtmpl': os.path.join(TEMP_AUDIO_DIR, 'youtube_audio_%(id)s.%(ext)s'),
     'quiet': False,
     'no_warnings': False,
     'nocheckcertificate': True,
-    'source_address': '0.0.0.0',
     'socket_timeout': 30,
     'retries': 3,
     'fragment_retries': 3,
     'skip_unavailable_fragments': True,
-    'forceip': 4, # Force IPv4 to bypass some 403 Forbidden errors
     'extractor_retries': 3,
     'ignoreerrors': 'only_download',
     'no_color': True,
     'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-us,en;q=0.5',
         'Sec-Fetch-Mode': 'navigate',
     },
-    'ffmpeg_location': 'C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe',
     'keepvideo': False,
-    'merge_output_format': 'wav'
 }
 
 def make_safe_filename(filename):
@@ -241,7 +231,6 @@ def download_file(filename):
 if __name__ == '__main__':
     print("Starting Flask application...")
     print(f"Debug mode: {app.debug}")
-    print(f"Environment: {app.env}")
     print("Available routes:")
     for rule in app.url_map.iter_rules():
         print(f"  {rule.endpoint} - {rule.rule}")
