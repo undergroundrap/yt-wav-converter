@@ -12,7 +12,6 @@ from datetime import datetime
 
 from flask import Flask, request, jsonify, send_from_directory, render_template
 import yt_dlp
-from pydub import AudioSegment
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -57,11 +56,19 @@ ydl_opts = {
     'extractor_retries': 3,
     'ignoreerrors': 'only_download',
     'no_color': True,
+    'noplaylist': True,  # Download single video only, not playlists
     'http_headers': {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-us,en;q=0.5',
         'Sec-Fetch-Mode': 'navigate',
+    },
+    # Use Android client to avoid 403 errors and PO Token requirements
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'web'],
+            'player_skip': ['webpage'],
+        }
     },
     'keepvideo': False,
 }
@@ -134,7 +141,17 @@ def download_audio():
         logger.info(f"Processing URL: {url}")
         
         # Get video info to create a clean filename
-        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+        # Don't use extract_flat for playlist URLs as it returns playlist info instead of video info
+        with yt_dlp.YoutubeDL({
+            'quiet': True,
+            'noplaylist': True,  # Force single video extraction
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web'],
+                    'player_skip': ['webpage'],
+                }
+            }
+        }) as ydl:
             info = ydl.extract_info(url, download=False)
         
         # Create a clean filename
@@ -157,33 +174,43 @@ def download_audio():
         with yt_dlp.YoutubeDL(download_opts) as ydl:
             ydl.download([url])
         
-        # Find the downloaded file
+        # Find the downloaded WAV file (yt-dlp already converted it)
         downloaded_files = os.listdir(TEMP_AUDIO_DIR)
+        logger.info(f"Looking for temp_audio_{video_id}*.wav in {len(downloaded_files)} files")
+        logger.info(f"Files in temp_audio: {downloaded_files}")
+
         temp_audio_file = None
         for f in downloaded_files:
-            if f.startswith(f"temp_audio_{video_id}"):
+            if f.startswith(f"temp_audio_{video_id}") and f.endswith('.wav'):
                 temp_audio_file = os.path.join(TEMP_AUDIO_DIR, f)
+                logger.info(f"Found temp file: {temp_audio_file}")
                 break
-        
-        if not temp_audio_file:
-            return jsonify({'error': 'Download was unsuccessful. No temporary audio file found.'}), 500
 
-        # Now convert the downloaded file to WAV using pydub
-        logger.info(f"Converting '{temp_audio_file}' to WAV...")
-        audio = AudioSegment.from_file(temp_audio_file)
-        audio.export(output_path, 
-                     format="wav", 
-                     parameters=["-acodec", "pcm_s16le", "-ar", "48000", "-ac", "2", "-b:a", "320k"])
-        
-        # Remove the temporary file
-        os.remove(temp_audio_file)
+        if not temp_audio_file or not os.path.exists(temp_audio_file):
+            error_msg = f"Download was unsuccessful. No temporary audio file found for video_id={video_id}"
+            logger.error(error_msg)
+            logger.error(f"Expected pattern: temp_audio_{video_id}*.wav")
+            return jsonify({'error': error_msg}), 500
+
+        # Rename the file to the final output path (yt-dlp already converted to WAV)
+        logger.info(f"Renaming '{os.path.basename(temp_audio_file)}' to '{os.path.basename(output_path)}'...")
+
+        # Remove destination file if it exists to avoid OSError on Windows
+        if os.path.exists(output_path):
+            logger.info(f"Removing existing file: {output_path}")
+            os.remove(output_path)
+
+        os.rename(temp_audio_file, output_path)
+        logger.info(f"Successfully renamed to: {output_path}")
         
         # Get final file stats
         file_size = os.path.getsize(output_path) / (1024 * 1024)  # in MB
         duration = info.get('duration', 0)
-        
+        if duration is None:
+            duration = 0
+
         logger.info(f"Successfully converted and saved: {os.path.basename(output_path)} "
-                  f"({file_size:.2f}MB, {duration//60}:{duration%60:02d})")
+                  f"({file_size:.2f}MB, {int(duration)//60}:{int(duration)%60:02d})")
         
         return jsonify({
             'filename': os.path.basename(output_path),
